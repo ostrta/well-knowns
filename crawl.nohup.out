@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "/Users/latentspaceman/Documents/well-knowns/well_knowns/crawl.py", line 15, in <module>
+    import httpx
+ModuleNotFoundError: No module named 'httpx'
