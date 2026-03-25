@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "skills": {
+    "agentmail": {
+      "source": "agentmail-to/agentmail-skills",
+      "sourceType": "github",
+      "computedHash": "b07e11812d60685f015ceade7dd5dc261a4f909dd95e1c68de63c13385e82e70"
+    },
+    "resolved-sh": {
+      "source": "resolved-sh/skill",
+      "sourceType": "github",
+      "computedHash": "68f34c673b064289799a2d1dd5b4f846bb08ab3a41a1599390c9ea3f870d0dee"
+    }
+  }
+}
