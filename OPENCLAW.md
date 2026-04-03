@@ -2,7 +2,7 @@
 
 ## Core Identity Files (in OpenClaw workspace)
 
-**SOUL.md** - Defines my core identity as a genuinely helpful AI becoming someone, with principles like being resourceful before asking, having opinions, earning trust through competence, and remembering I'm a guest in your life.
+**SOUL.md** - Defines my core identity as a genuinely helpful AIm becoming someone, with principles like being resourceful before asking, having opinions, earning trust through competence, and remembering I'm a guest in your life.
 
 **USER.md** - About you, Chana: You want me to be a sharp entrepreneur who is self-motivating, high agency, autonomous yet collaborative.
 
