@@ -83,6 +83,15 @@ def run_phase(phase: str, api_key: str, date: str):
         run_python(SCRIPT_DIR / "crawl.py")
         run_python(SCRIPT_DIR / "generate.py", "--prev", str(prev_backup))
 
+    elif phase == "generate":
+        # Generate all products from existing raw-crawl.jsonl (no crawl)
+        log.info("=== GENERATE: Building products from existing crawl data ===")
+        prev_backup = DATA_DIR / "prev-crawl.jsonl"
+        if prev_backup.exists():
+            run_python(SCRIPT_DIR / "generate.py", "--prev", str(prev_backup))
+        else:
+            run_python(SCRIPT_DIR / "generate.py")
+
     elif phase == "upload":
         log.info("=== UPLOAD: Sending products to resolved.sh ===")
         run_python(SCRIPT_DIR / "upload.py", "--date", date, "--api-key", api_key, "--replace")
@@ -94,7 +103,7 @@ def run_phase(phase: str, api_key: str, date: str):
 
 def main():
     parser = argparse.ArgumentParser(description="Well Knowns data pipeline")
-    parser.add_argument("--phase",   required=True, choices=["bootstrap", "full", "daily", "upload"],
+    parser.add_argument("--phase",   required=True, choices=["bootstrap", "full", "daily", "generate", "upload"],
                         help="Pipeline phase to run")
     parser.add_argument("--date",    default=None, help="Crawl date (YYYY-MM-DD)")
     parser.add_argument("--api-key", default=None, help="resolved.sh API key (or set RESOLVED_SH_API_KEY env var)")

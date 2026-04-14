@@ -4,6 +4,7 @@ well_knowns/generate.py
 Reads raw-crawl.jsonl and generates all derived data products.
 """
 
+import gzip
 import json
 import logging
 import sys
@@ -292,6 +293,22 @@ def main():
         }
     else:
         log.info("No previous crawl found — skipping delta")
+
+    # Full Catalog — all validated records in JSONL + gzip ($1.00)
+    catalog_path = DATA_DIR / f"full-catalog-{date}.jsonl"
+    with catalog_path.open("w") as f:
+        for rec in records:
+            f.write(json.dumps(rec) + "\n")
+    gz_path = catalog_path.with_suffix(".jsonl.gz")
+    with catalog_path.open("rb") as f_in, gzip.open(gz_path, "wb") as f_out:
+        f_out.write(f_in.read())
+    log.info("Full Catalog: %d records → %s (+ .gz)", len(records), catalog_path)
+    products["Full Catalog"] = {
+        "filename": catalog_path.name,
+        "price_usdc": "1.00",
+        "record_count": len(records),
+        "format": "JSONL",
+    }
 
     # Catalog Manifest (free)
     manifest      = generate_manifest(records, products)

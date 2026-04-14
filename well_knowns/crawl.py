@@ -33,9 +33,10 @@ WELL_KNOWN_PATHS = [
     "host-meta",
 ]
 
-CONCURRENT_LIMIT  = 400    # increased for faster crawling
-REQUEST_TIMEOUT   = 1.5     # seconds — faster timeout, early-exit on connect errors
-BATCH_SIZE        = 1_000   # checkpoint every N domains
+CONCURRENT_LIMIT  = 50     # concurrent domain probes (higher doesn't help due to connection pool limits)
+REQUEST_TIMEOUT   = 1.5    # seconds per request
+CONNECT_TIMEOUT   = 0.5    # seconds — early-exit on dead/refused hosts
+BATCH_SIZE        = 1_000  # checkpoint every N domains
 
 logging.basicConfig(
     level=logging.INFO,
@@ -143,7 +144,7 @@ async def probe_domain(client: httpx.AsyncClient, domain: str, rank: int = None)
             "content_type": None, "data": None, "raw": None, "error": None,
         }
         try:
-            r = await client.get(url, timeout=REQUEST_TIMEOUT)  # max_redirects=0 to prevent silent double-probes
+            r = await client.get(url)  # uses client-level timeout (REQUEST_TIMEOUT + CONNECT_TIMEOUT)
             ep["status"] = r.status_code
             ep["response_time_ms"] = int(r.elapsed.total_seconds() * 1000)
             ep["content_type"] = r.headers.get("content-type", "")
@@ -189,43 +190,43 @@ async def probe_domain(client: httpx.AsyncClient, domain: str, rank: int = None)
 # ── Batch runner ───────────────────────────────────────────────────────────────
 
 async def run_batch(domains: list[str], output_path: Path, resume: bool = True):
-    sem    = asyncio.Semaphore(CONCURRENT_LIMIT)
-    limits = httpx.Limits(max_connections=200, max_keepalive_connections=100)
+    limits  = httpx.Limits(max_connections=CONCURRENT_LIMIT + 50, max_keepalive_connections=100)
     headers = {"User-Agent": "well-knowns-bot/1.0 (+https://well-knowns.com/bot)"}
 
-    # Load checkpoint state
-    state = load_state()
-
-    # Load rank map
+    state    = load_state()
     rank_map = load_ranks()
 
-    # Load domains already written to JSONL (dedup pass)
     if resume:
         already_written = dedup_jsonl(output_path)
-        state["written"] = list(set(state["written"]) | already_written)
+        # Merge already-written into BOTH written and processed so we don't re-probe them
+        state["written"]    = list(set(state["written"])    | already_written)
+        state["processed"]  = list(set(state["processed"])  | already_written)
     else:
-        already_written = set()
-        state["written"] = []
+        state["written"]   = []
+        state["processed"] = []
 
     processed = set(state["processed"])
     written   = set(state["written"])
 
+    pending = [d for d in domains if d not in processed]
+    log.info("Processing %d domains (%d already done)", len(pending), len(processed))
+
     async with httpx.AsyncClient(
-        timeout=httpx.Timeout(REQUEST_TIMEOUT),
+        timeout=httpx.Timeout(REQUEST_TIMEOUT, connect=CONNECT_TIMEOUT),
         limits=limits,
         headers=headers,
     ) as client:
-        for i, domain in enumerate(domains):
-            if domain in processed:
-                continue
+        # Process in explicit batches of CONCURRENT_LIMIT so we never have more than
+        # CONCURRENT_LIMIT coroutines in flight simultaneously (avoids asyncio overhead).
+        for batch_start in range(0, len(pending), CONCURRENT_LIMIT):
+            batch = pending[batch_start:batch_start + CONCURRENT_LIMIT]
 
-            async with sem:
+            async def probe_one(domain: str) -> tuple[str, dict]:
                 try:
-                    rank = rank_map.get(domain)
-                    record = await probe_domain(client, domain, rank=rank)
+                    return domain, await probe_domain(client, domain, rank=rank_map.get(domain))
                 except Exception as e:
                     log.error("Unhandled error for %s: %s", domain, e)
-                    record = {
+                    return domain, {
                         "domain": domain,
                         "rank": rank_map.get(domain),
                         "crawled_at": datetime.now(timezone.utc).isoformat(),
@@ -233,31 +234,27 @@ async def run_batch(domains: list[str], output_path: Path, resume: bool = True):
                         "endpoints": {},
                     }
 
-                if record.get("domain") in written:
+            results = await asyncio.gather(*(probe_one(d) for d in batch), return_exceptions=True)
+
+            with output_path.open("a") as f:
+                for item in results:
+                    if isinstance(item, Exception):
+                        continue
+                    domain, record = item
                     processed.add(domain)
-                    continue
+                    record_domain = record.get("domain", domain)
+                    if record_domain not in written:
+                        f.write(json.dumps(record) + "\n")
+                        written.add(record_domain)
 
-                with output_path.open("a") as f:
-                    f.write(json.dumps(record) + "\n")
-
-                written.add(record.get("domain", domain))
-                processed.add(domain)
-
-            if len(processed) % BATCH_SIZE == 0:
+            n = len(processed)
+            if n % BATCH_SIZE == 0 or batch_start + CONCURRENT_LIMIT >= len(pending):
                 state["processed"] = list(processed)
                 state["written"]   = list(written)
                 save_state(state)
-                log.info("Checkpoint: %d domains processed", len(processed))
+                log.info("Checkpoint: %d processed, %d written", n, len(written))
 
-            if i > 0 and i % 100 == 0:
-                await asyncio.sleep(0.3)
-
-    # Final checkpoint
-    state["processed"] = list(processed)
-    state["written"]   = list(written)
-    save_state(state)
-    log.info("Done. Total processed: %d  (new this run: %d)",
-             len(processed), len(written))
+    log.info("Done. Total processed: %d, written: %d", len(processed), len(written))
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
