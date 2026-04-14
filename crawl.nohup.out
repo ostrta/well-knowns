@@ -1,4 +1,8 @@
-Traceback (most recent call last):
-  File "/Users/latentspaceman/Documents/well-knowns/well_knowns/crawl.py", line 15, in <module>
-    import httpx
-ModuleNotFoundError: No module named 'httpx'
+2026-04-14 10:34:53,998 INFO Loaded 100000 domains from /Users/latentspaceman/Documents/archive/well-knowns/data/domains.txt
+2026-04-14 10:34:54,033 INFO Loaded ranks for 100000 domains
+2026-04-14 10:34:54,353 INFO Processing 68576 domains (31649 already done)
+2026-04-14 10:34:57,838 INFO HTTP Request: GET https://cmagichosting.com/.well-known/host-meta "HTTP/1.1 404 Not Found"
+2026-04-14 10:34:57,844 INFO HTTP Request: GET https://cmagichosting.com/.well-known/agent-card.json "HTTP/1.1 404 Not Found"
+2026-04-14 12:40:48,963 INFO Checkpoint: 100225 processed, 100225 written
+2026-04-14 12:40:48,963 INFO Done. Total processed: 100225, written: 100225
+2026-04-14 12:40:48,968 INFO Crawl complete. Output: /Users/latentspaceman/Documents/archive/well-knowns/data/raw-crawl.jsonl
